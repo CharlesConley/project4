@@ -245,11 +245,12 @@ bool BTreeIndex::compK(int lowValInt,const Operator lowOp,int highValInt,const O
             retVal = (key >= lVal && key <= hVal);
             return retVal;
         }
-        if(highOp == LT)
+        if(highOp == LT){
             retVal = (key < hVal && key >= lVal);
             return retVal;
+	    }
     }
-    else(lowOp == GT);{
+    if(lowOp == GT){
         if(highOp == LTE) {
             retVal = (key <= hVal && key > lVal);
             return retVal;
@@ -258,6 +259,7 @@ bool BTreeIndex::compK(int lowValInt,const Operator lowOp,int highValInt,const O
             retVal = (key < hVal && key > lVal);
             return retVal;
         }
+    else return false;
     }
 
 }
