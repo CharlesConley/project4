@@ -235,33 +235,18 @@ void BTreeIndex::scanNext(RecordId& outRid)
 }
 
 bool BTreeIndex::compK(int lowValInt,const Operator lowOp,int highValInt,const Operator highOp, int key){
-
     int lVal = (lowValInt);
     int hVal = (highValInt);
-    bool retVal;
-
+    bool retVal = false;
     if(lowOp == GTE){
-        if(highOp == LTE) {
-            retVal = (key >= lVal && key <= hVal);
-            return retVal;
-        }
-        if(highOp == LT){
-            retVal = (key < hVal && key >= lVal);
-            return retVal;
-	    }
+        if(highOp == LTE)retVal = (key >= lVal && key <= hVal);
+        if(highOp == LT)retVal = (key < hVal && key >= lVal); 
     }
     if(lowOp == GT){
-        if(highOp == LTE) {
-            retVal = (key <= hVal && key > lVal);
-            return retVal;
-        }
-        if(highOp == LT) {
-            retVal = (key < hVal && key > lVal);
-            return retVal;
-        }
-    else return false;
+        if(highOp == LTE)retVal = (key <= hVal && key > lVal);
+        if(highOp == LT)retVal = (key < hVal && key > lVal);
     }
-
+    return retVal;
 }
 
 
