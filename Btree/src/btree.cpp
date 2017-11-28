@@ -148,7 +148,22 @@ BTreeIndex::~BTreeIndex()
 
 void BTreeIndex::insertEntry(const void *key, const RecordId rid) 
 {
-
+    Page* tmpPage;
+    bufMgr->readPage(file, rootPageNum, tmpPage);
+    
+    NonLeafNodeInt* rootPage = (NonLeafNodeInt*)tmpPage;
+    
+    ///on the rootpage. check to see if there is a range for key, otherwise insert key.
+    
+    bool foundLeaf = false;
+    int i = 0;
+    while(!foundLeaf && i < NodeOccupancy){
+        if(rootPage->keyArray[i] > 
+        
+        
+    }
+    
+    
 }
 
 // -----------------------------------------------------------------------------
@@ -248,8 +263,7 @@ bool BTreeIndex::compK(int lowValInt,const Operator lowOp,int highValInt,const O
         if(highOp == LT)
             retVal = (key < hVal && key >= lVal);
             return retVal;
-    }
-    else(lowOp == GT);{
+    }if(lowOp == GT){
         if(highOp == LTE) {
             retVal = (key <= hVal && key > lVal);
             return retVal;
@@ -259,7 +273,6 @@ bool BTreeIndex::compK(int lowValInt,const Operator lowOp,int highValInt,const O
             return retVal;
         }
     }
-
 }
 
 
