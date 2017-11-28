@@ -291,7 +291,10 @@ class BTreeIndex {
    */
 	Operator	highOp;
 
-	
+		
+bool compK(int lowValInt,const Operator lowOp,int highValInt,const Operator highOp, int key);
+
+
  public:
 
   /**
@@ -364,7 +367,7 @@ class BTreeIndex {
 	 * @throws ScanNotInitializedException If no scan has been initialized.
 	**/
 	void endScan();
-	
-};
 
+};
+	
 }
