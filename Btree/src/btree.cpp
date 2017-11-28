@@ -158,6 +158,31 @@ void BTreeIndex::startScan(const void* lowValParm,
 				   const void* highValParm,
 				   const Operator highOpParm)
 {
+	// check low and high operators are correct, if not, throw BadOpCodeException error
+	if (lowOpParm != GT && lowOpParm != GTE) {
+        scanExecuting = false;
+		throw BadOpcodesException();
+	}
+    else if (highOpParm != LT && highOpParm != LTE) {
+        scanExecuting = false;
+        throw BadOpcodesException();
+    }
+
+	// check value search range is valid, ie low value < high value
+    if (lowValParm > highValParm) {
+        scanExecuting = false;
+        throw BadScanrangeException();
+    }
+
+    // If another scan is already executing, that needs to be ended here
+    if (scanExecuting) {
+        endScan();
+    }
+    
+
+    scanExecuting = true;
+    lowOp = lowOpParm;
+    highOp = highOpParm;
 
 }
 
