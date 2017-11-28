@@ -2,7 +2,7 @@
 #               CMake Project Wrapper Makefile               #
 ############################################################## 
 CC = g++
-CFLAGS = -std=c++11 -Wall -g
+CFLAGS = -std=c++11 -g
 OBJ = src/obj
 LIB = src/lib
 
