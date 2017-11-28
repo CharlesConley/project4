@@ -34,10 +34,8 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		const int attrByteOffset,
 		const Datatype attrType)
 {
-<<<<<<< HEAD
-scanExecuting = true;
+    scanExecuting = true;
 
-=======
     this->attrByteOffset = attrByteOffset;
     this->attributeType = attrType;
 
@@ -130,8 +128,7 @@ scanExecuting = true;
         rootPageNum = metaInfo->rootPageNo;
         bufMgr->unPinPage(file, 1, false);
     }
-    
->>>>>>> 40902cc7c4c5e21e41d0e79a8e30e0e002213e05
+
 }
 
 
@@ -197,60 +194,71 @@ void BTreeIndex::startScan(const void* lowValParm,
 
 void BTreeIndex::scanNext(RecordId& outRid) 
 {
-LeafNodeInt* cnode = 0;
-int nextPage = 0;
+    LeafNodeInt* cnode = 0;
+    int nextPage = 0;
 
-//check if this is called before a startScan call
-if(scanExecuting == false){throw ScanNotInitializedException();}
-//check if page num is 0. throw exception
-if(currentPageNum == 0){throw IndexScanCompletedException();}
-//get node from currentPageData
-cnode = (LeafNodeInt*)currentPageData;
-//check if its at the end of a page. throw exception
-if(cnode->rightSibPageNo == 0){throw IndexScanCompletedException();}
-nextPage = cnode->ridArray[nextEntry].page_number;
-//chekc if end of page. if yes unpin then read
-if((nextEntry == INTARRAYLEAFSIZE) || (nextPage == 0)){
-//unpin page
-bufMgr->unPinPage(file, currentPageNum, false);
-//goto next page. read it.
-bufMgr->readPage(file,cnode->rightSibPageNo,currentPageData);
-nextEntry =0;
-}
-int k = cnode->keyArray[nextEntry]; 
-//now check if key/rid works
-while(compK(lowValInt,lowOp,highValInt, highOp, k) == false){
-if(outRid == cnode->ridArray[nextEntry]){
-//found a match. throw finish exception
-throw  IndexScanCompletedException();
-}
-nextEntry++;
+    //check if this is called before a startScan call
+    if(scanExecuting == false){throw ScanNotInitializedException();}
 
-}
+    //check if page num is 0. throw exception
+    if(currentPageNum == 0){throw IndexScanCompletedException();}
+
+    //get node from currentPageData
+    cnode = (LeafNodeInt*)currentPageData;
+
+    //check if its at the end of a page. throw exception
+    if(cnode->rightSibPageNo == 0){throw IndexScanCompletedException();}
+    nextPage = cnode->ridArray[nextEntry].page_number;
+
+    //chekc if end of page. if yes unpin then read
+    if((nextEntry == INTARRAYLEAFSIZE) || (nextPage == 0)){
+
+        //unpin page
+        bufMgr->unPinPage(file, currentPageNum, false);
+
+        //goto next page. read it.
+        bufMgr->readPage(file,cnode->rightSibPageNo,currentPageData);
+        nextEntry =0;
+    }
+
+    int k = cnode->keyArray[nextEntry];
+    //now check if key/rid works
+    while(compK(lowValInt,lowOp,highValInt, highOp, k) == false){
+    if(outRid == cnode->ridArray[nextEntry]){
+        //found a match. throw finish exception
+        throw  IndexScanCompletedException();
+    }
+    nextEntry++;
+
+    }
 
 }
 
 bool BTreeIndex::compK(int lowValInt,const Operator lowOp,int highValInt,const Operator highOp, int key){
 
-int lVal = (lowValInt);
-int hVal = (highValInt);
-bool retVal;
-if(lowOp == GTE){
-	if(highOp == LTE)
-		retVal =(key >= lVal && key <=hVal);
-		return retVal; 
-	if(highOp == LT)
-		retVal = (key < hVal && key >= lVal);
-		return retVal;
-}
-else(lowOp == GT);{
-	if(highOp == LTE)
-		retVal = (key <= hVal && key > lVal);
-		return retVal;
-	if(highOp == LT)
-		retVal = (key < hVal && key > lVal);
-		return retVal;
-}
+    int lVal = (lowValInt);
+    int hVal = (highValInt);
+    bool retVal;
+
+    if(lowOp == GTE){
+        if(highOp == LTE) {
+            retVal = (key >= lVal && key <= hVal);
+            return retVal;
+        }
+        if(highOp == LT)
+            retVal = (key < hVal && key >= lVal);
+            return retVal;
+    }
+    else(lowOp == GT);{
+        if(highOp == LTE) {
+            retVal = (key <= hVal && key > lVal);
+            return retVal;
+        }
+        if(highOp == LT) {
+            retVal = (key < hVal && key > lVal);
+            return retVal;
+        }
+    }
 
 }
 
@@ -261,13 +269,16 @@ else(lowOp == GT);{
 //
 void BTreeIndex::endScan() 
 {
-//check if this is called before a startScan call
-if(scanExecuting == false){throw ScanNotInitializedException();}
-//end the scan
-scanExecuting = false;
-//unpin page
-bufMgr->unPinPage(file, currentPageNum, false);
-}
-//reset scan spefific variables
+    //check if this is called before a startScan call
+    if(scanExecuting == false){throw ScanNotInitializedException();}
+
+    //end the scan
+    scanExecuting = false;
+
+    //unpin page
+    bufMgr->unPinPage(file, currentPageNum, false);
+    }
+
+    //reset scan spefific variables
 
 }
