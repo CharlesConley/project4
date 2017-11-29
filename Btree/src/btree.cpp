@@ -23,7 +23,6 @@
 
 namespace badgerdb
 {
-
 // -----------------------------------------------------------------------------
 // BTreeIndex::BTreeIndex -- Constructor
 // -----------------------------------------------------------------------------
@@ -68,9 +67,9 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
         bufMgr->allocPage(file, headerPageNum, metaHeaderPage);
         bufMgr->allocPage(file, rPageNum, rootPage);
         
-        rootPageNum = rPageNum;
-        
         metaInfo = (IndexMetaInfo*)metaHeaderPage;
+        
+        rootPageNum = rPageNum;
         
         metaInfo->rootPageNo = rPageNum;
         metaInfo->attrByteOffset = attrByteOffset;
@@ -80,14 +79,13 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
         
         ///Insert the entries related to the relation into the index file.
         FileScan fScan = FileScan(relationName, bufMgr);
-        NonLeafNodeInt *rootNode;
-        rootNode = (NonLeafNodeInt*)rootPage;
+        LeafNodeInt *rootNode;
+        rootNode = (LeafNodeInt*)rootPage;
         ///Initialize rootNode as nonLeafNodeInt, set all pages to 0
-        rootNode->level = 1;
-        
-        rootNode->pageNoArray[INTARRAYNONLEAFSIZE] = {};
         
         
+        metaInfo->isRootALeaf = true;
+        isRootALeaf = true;
         bufMgr->unPinPage(file, headerPageNum, true);
         bufMgr->unPinPage(file, rootPageNum, true);
         
@@ -95,8 +93,12 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
         RecordId tmpRec;
         std::string tmpStr;
         int* key;
+        
         try{
+            int tracker = 0;
             while(1){
+                std::cout << tracker << std::endl;
+                tracker++;
                 fScan.scanNext(tmpRec);
                 tmpStr = fScan.getRecord();
                 key = (int*)&tmpStr + attrByteOffset;
@@ -121,11 +123,10 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
         std::cout << metaInfo->relationName << " " << relationName << std::endl;
         ///Datatype will always be int. Check attrByteOffset and relation name to make sure this is the correct index
         if(strcmp((char *)&(metaInfo->relationName),(const char *)&relationName) != 0){
-            
-            
             throw BadIndexInfoException("The Relation in the indexFile is not the same as the tree");
         }
         rootPageNum = metaInfo->rootPageNo;
+        isRootALeaf = metaInfo->isRootALeaf;
         bufMgr->unPinPage(file, 1, false);
     }
 
@@ -142,6 +143,247 @@ BTreeIndex::~BTreeIndex()
     file->~File();
 }
 
+///newNodeInfo will contain the pageId and key, level will indicate whether or not the new root node is just above the leafs
+void BTreeIndex::rootSplit(PageKeyPair<int> newNodeInfo, int level)
+{
+ 
+    PageId newPageNum;
+    Page * tmpPage;
+    bufMgr->allocPage(file, newPageNum, tmpPage);
+    
+    NonLeafNodeInt* newRootNode = (NonLeafNodeInt*)tmpPage;
+    newRootNode->level = level;
+    
+    ///set NonLeafNode info for RootNode
+    newRootNode->keyArray[0] = newNodeInfo.key;
+    ///left of key is the root, right is the newNode
+    newRootNode->pageNoArray[0] = rootPageNum;
+    newRootNode->pageNoArray[1] = newNodeInfo.pageNo;
+    
+    ///update rootPageNum
+    rootPageNum = newNodeInfo.pageNo;
+    
+    ///read and update MetaPage
+    Page* tmpMetaPage;
+    bufMgr->readPage(file, 1, tmpMetaPage);
+    IndexMetaInfo* metaInfo = (IndexMetaInfo*)tmpMetaPage;
+    
+    metaInfo->rootPageNo = rootPageNum;
+    metaInfo->isRootALeaf = false;
+    bufMgr->unPinPage(file, newPageNum, true);
+    
+}
+    
+void BTreeIndex::nonLeafSplit(NonLeafNodeInt* nonLeafNode, PageKeyPair<int>& newNonLeafPage, PageKeyPair<int> pageEntry)
+{
+    ///create a new nonLeafNode, reassign half the values to the new node, pass the middle key/pageNo combo back up
+    PageId newPageNum;
+    Page * tmpPage;
+    bufMgr->allocPage(file, newPageNum, tmpPage);
+    
+    NonLeafNodeInt* newNonLeafNode = (NonLeafNodeInt*)tmpPage;
+    int i;
+    for(i = 0; i < nodeOccupancy/2; i++){
+        newNonLeafNode->keyArray[i] = nonLeafNode->keyArray[nodeOccupancy/2 + i];
+        nonLeafNode->keyArray[nodeOccupancy/2 + i] = 0;
+        newNonLeafNode->pageNoArray[i] = nonLeafNode->pageNoArray[nodeOccupancy/2 + i];
+        nonLeafNode->pageNoArray[nodeOccupancy/2 + i] = 0;
+    }
+    ///since pageNoArray is one large, manually change the last values
+    newNonLeafNode->pageNoArray[nodeOccupancy/2] = nonLeafNode->pageNoArray[nodeOccupancy];
+    nonLeafNode->pageNoArray[nodeOccupancy] = 0;
+    
+    if(nonLeafNode->keyArray[nodeOccupancy/2 - 1] > pageEntry.key){
+        nonLeafInsert(nonLeafNode, pageEntry);
+    }else nonLeafInsert(newNonLeafNode, pageEntry);
+    
+    newNonLeafPage.set(newPageNum, newNonLeafNode->keyArray[0]);
+    bufMgr->unPinPage(file, newPageNum, true);
+    
+}
+    
+void BTreeIndex::leafSplit(LeafNodeInt* leafNode, PageKeyPair<int>& newLeafPage, RIDKeyPair<int> dataEntry)
+{
+    ///create a new nonLeafNode, reassign half the values to the new node, pass the middle key/pageNo combo back up
+    PageId newPageNum;
+    Page * tmpPage;
+    bufMgr->allocPage(file, newPageNum, tmpPage);
+    
+    LeafNodeInt* newLeafNode = (LeafNodeInt*)tmpPage;
+    int i;
+    for(i = 0; i < leafOccupancy/2; i++){
+        newLeafNode->keyArray[i] = leafNode->keyArray[leafOccupancy/2 + i];
+        leafNode->keyArray[leafOccupancy/2 + i] = 0;
+        newLeafNode->ridArray[i] = leafNode->ridArray[leafOccupancy/2 + i];
+        leafNode->ridArray[leafOccupancy/2 + i].page_number = 0;
+    }
+
+    newLeafNode->rightSibPageNo = leafNode->rightSibPageNo;
+    leafNode->rightSibPageNo = newPageNum;
+    
+    if(leafNode->keyArray[nodeOccupancy/2 - 1] > dataEntry.key){
+        leafInsert(leafNode, dataEntry);
+    }else leafInsert(newLeafNode, dataEntry);
+    
+    newLeafPage.set(newPageNum, newLeafNode->keyArray[0]);
+    bufMgr->unPinPage(file, newPageNum, true);
+    
+}
+    
+    
+// -----------------------------------------------------------------------------
+// leafInsert
+// -----------------------------------------------------------------------------
+    
+
+    
+void BTreeIndex::leafInsert(LeafNodeInt * leafNode, RIDKeyPair<int> dataEntry)
+{
+    
+    ///traverse leafNode for insert index, stop at first key that is greater than insert key
+    int i;
+    for(int i = 0; i < leafOccupancy && leafNode->ridArray[i].page_number != 0; i++){
+        
+        if(dataEntry.key < leafNode->keyArray[i])break; ///found insert location
+        
+    }
+    
+    ///shift all entries one to the right. Work from right to left to avoid overwriting entries
+    int n;
+    for(n = leafOccupancy - 1; n > i; n--){
+        ///set [n-1] to [n]
+        
+        leafNode->keyArray[n] = leafNode->keyArray[n-1];
+        leafNode->ridArray[n] = leafNode->ridArray[n-1];
+    }
+    
+    leafNode->keyArray[i] = dataEntry.key;
+    leafNode->ridArray[i] = dataEntry.rid;
+    
+}
+    
+void BTreeIndex::nonLeafInsert(NonLeafNodeInt * nonLeafNode, PageKeyPair<int> pageEntry)
+{
+    ///node has been split and we need to now insert the pageEntry
+    
+    int i;
+    for(int i = 0; i < nodeOccupancy && nonLeafNode->pageNoArray[i] != 0; i++){
+        
+        if(pageEntry.key < nonLeafNode->keyArray[i] )break; ///found insert location
+    }
+    
+    ///shift all entries one to the right
+    int n;
+    for(n = nodeOccupancy -1; n > i; n--){
+        nonLeafNode->keyArray[n] = nonLeafNode->keyArray[n-1];
+        nonLeafNode->pageNoArray[n+1] = nonLeafNode->pageNoArray[n];
+    }
+
+    nonLeafNode->keyArray[i] = pageEntry.key;
+    nonLeafNode->pageNoArray[i+1] = pageEntry.pageNo;
+
+
+}
+        
+    
+void BTreeIndex::rootLeafInsert(LeafNodeInt * rootNode, RIDKeyPair<int> dataEntry, bool split)
+{
+    
+    if(!split){ ///don't need to split, treat like any other leaf
+        leafInsert(rootNode, dataEntry);
+    }else{
+        ///split the node and make a new root node to take its place
+        
+        PageKeyPair<int> newRootPage;
+        
+        leafSplit(rootNode, newRootPage, dataEntry);
+        PageId curRootPage = rootPageNum;
+        
+        rootSplit(newRootPage, 1);
+        bufMgr->unPinPage(file, curRootPage, true);
+    }
+        
+}
+    
+// -----------------------------------------------------------------------------
+// FindLeaf
+// Arguments:  RIDKeypair to be inserted, current page number, and Placeholder PageKeyPair entry as overflow tracker
+// -----------------------------------------------------------------------------
+///Recursively visit each node on the way down to the leaf node that contains the correct location for the key. Start at root
+///Base Case, the next node is a leaf node and the insertion can be attempted.
+void BTreeIndex::findandInsert(RIDKeyPair<int> dataEntry, PageId curPageNum, PageKeyPair<int>& splitEntry)
+{
+    ///read current page from bufferManager
+    Page* tmpPage;
+    bufMgr->readPage(file, curPageNum, tmpPage);
+    
+    ///this will always be a nonLeaf page
+    NonLeafNodeInt* curPage = (NonLeafNodeInt*)tmpPage;
+    
+    ///find dataEntry's key position relative to curPage keyArray
+    int i;
+    PageId nextPageNum;
+    for(i = 0; i < nodeOccupancy && curPage->pageNoArray[i] != 0; i++){
+        
+        if(dataEntry.key < curPage->keyArray[i]){
+            break;
+        }
+        
+    }
+    
+    nextPageNum = curPage->pageNoArray[i];
+    
+    if(curPage->level == 1){ ///directly above leaf. Next page is leafNode
+        Page* nextPage;
+        
+        bufMgr->readPage(file, nextPageNum, nextPage);
+        
+        LeafNodeInt * leafNode = (LeafNodeInt*)nextPage;
+        
+        if(leafNode->ridArray[leafOccupancy-1].page_number != 0){///will need to split
+            
+            PageKeyPair<int> newLeafPage;
+            leafSplit(leafNode, newLeafPage, dataEntry);
+            
+            ///can the new key fit on currpage, if not split again.
+            if(curPage->pageNoArray[nodeOccupancy] != 0){
+                PageKeyPair<int> newNonLeafPage;
+                nonLeafSplit(curPage, newNonLeafPage, newLeafPage);
+                splitEntry = newNonLeafPage;
+            }else nonLeafInsert(curPage, newLeafPage);
+            
+        }else{///can be inserted no problem.
+            leafInsert(leafNode, dataEntry);
+        }
+        ///clear bufMgr of pinned files
+        bufMgr->unPinPage(file, curPageNum, true);
+        bufMgr->unPinPage(file, nextPageNum, true);
+        return;
+    }
+    
+    ///not low enough yer, traverse to next node
+    PageKeyPair<int> newSplitPage;
+    newSplitPage.set(0,0);
+    bufMgr->unPinPage(file, curPageNum, false);
+    
+    ///call the next level of search
+    findandInsert(dataEntry, nextPageNum, newSplitPage);
+    
+    ///on the way back up, check to see if newSplitPage has been modified, if so insert
+    if(newSplitPage.pageNo != 0) {
+        PageKeyPair<int> nonLeafPage;
+        nonLeafPage.set(newSplitPage.pageNo, newSplitPage.key);
+       if(curPage->pageNoArray[nodeOccupancy] != 0){
+           PageKeyPair<int> newNonLeafPage;
+           nonLeafSplit(curPage, newNonLeafPage, nonLeafPage);
+           splitEntry = newNonLeafPage;
+       }else nonLeafInsert(curPage, nonLeafPage);
+        
+    }
+}
+    
+    
+    
 // -----------------------------------------------------------------------------
 // BTreeIndex::insertEntry
 // -----------------------------------------------------------------------------
@@ -151,18 +393,36 @@ void BTreeIndex::insertEntry(const void *key, const RecordId rid)
     Page* tmpPage;
     bufMgr->readPage(file, rootPageNum, tmpPage);
     
-    NonLeafNodeInt* rootPage = (NonLeafNodeInt*)tmpPage;
+    RIDKeyPair<int> dataEntry;
+    dataEntry.set(rid, *(int*)key);
     
-    ///on the rootpage. check to see if there is a range for key, otherwise insert key.
-    
-    bool foundLeaf = false;
-    int i = 0;
-    while(!foundLeaf && i < NodeOccupancy){
-        if(rootPage->keyArray[i] > 
+    ///if root is a leaf, then manually insert until it needs to split
+    if(isRootALeaf){
         
+        LeafNodeInt * rootLeaf = (LeafNodeInt*)tmpPage;
+        ///check to see if last key/page pair is taken
+        if(rootLeaf->ridArray[leafOccupancy - 1].page_number != 0){
+            ///full and needs to split
+            isRootALeaf = false;
+            rootLeafInsert(rootLeaf, dataEntry, true);
+            
+        }else{
+            rootLeafInsert(rootLeaf, dataEntry, false);
+        }
+        
+    }else{
+        ///set up call to FindLeaf, let it handle the insert.
+        ///pass in root page number, dataEntry, and PageKeyPair entry
+        
+        PageKeyPair<int> splitEntry;
+        ///set page number to zero as this will mark whether a page is allocated
+        splitEntry.set(0, *(int*)key);
+        
+        findandInsert(dataEntry, rootPageNum, splitEntry);
+        
+        ///if splitEntry has a valid page, that means root needs to split
         
     }
-    
     
 }
 
@@ -250,29 +510,19 @@ void BTreeIndex::scanNext(RecordId& outRid)
 }
 
 bool BTreeIndex::compK(int lowValInt,const Operator lowOp,int highValInt,const Operator highOp, int key){
-
     int lVal = (lowValInt);
     int hVal = (highValInt);
-    bool retVal;
-
+    bool retVal = false;
+    
     if(lowOp == GTE){
-        if(highOp == LTE) {
-            retVal = (key >= lVal && key <= hVal);
-            return retVal;
-        }
-        if(highOp == LT)
-            retVal = (key < hVal && key >= lVal);
-            return retVal;
+        if(highOp == LTE) retVal = (key >= lVal && key <= hVal);
+        else if(highOp == LT) retVal = (key < hVal && key >= lVal);
     }if(lowOp == GT){
-        if(highOp == LTE) {
-            retVal = (key <= hVal && key > lVal);
-            return retVal;
-        }
-        if(highOp == LT) {
-            retVal = (key < hVal && key > lVal);
-            return retVal;
-        }
+        if(highOp == LTE) retVal = (key <= hVal && key > lVal);
+        else if(highOp == LT) retVal = (key < hVal && key > lVal);
     }
+    return retVal;
+    
 }
 
 

@@ -128,6 +128,11 @@ struct IndexMetaInfo{
    * Page number of root page of the B+ Tree inside the file index file.
    */
 	PageId rootPageNo;
+    
+    /**
+     * Whether or not the root is also a leaf node
+     */
+    bool isRootALeaf;
 };
 
 /*
@@ -227,6 +232,13 @@ class BTreeIndex {
    * Number of keys in non-leaf node, depending upon the type of key.
    */
 	int			nodeOccupancy;
+    
+    /**
+     * Whether or not the root is also a leaf node
+     */
+    bool isRootALeaf;
+    
+  
 
 
 	// MEMBERS SPECIFIC TO SCANNING
@@ -367,6 +379,21 @@ bool compK(int lowValInt,const Operator lowOp,int highValInt,const Operator high
 	 * @throws ScanNotInitializedException If no scan has been initialized.
 	**/
 	void endScan();
+    
+    
+    void rootSplit(PageKeyPair<int> newNodeInfo, int level);
+    
+    void nonLeafSplit(NonLeafNodeInt* nonleafNode, PageKeyPair<int>& newNonLeafPage, PageKeyPair<int> pageEntry);
+    
+    void leafSplit(LeafNodeInt* leafNode, PageKeyPair<int>& newLeafPage, RIDKeyPair<int> dataEntry);
+    
+    void leafInsert(LeafNodeInt * leafNode, RIDKeyPair<int> dataEntry);
+    
+    void rootLeafInsert(LeafNodeInt * rootNode, RIDKeyPair<int> dataEntry, bool split);
+    
+    void findandInsert(RIDKeyPair<int> dataEntry, PageId curPageNum, PageKeyPair<int>& splitEntry);
+    
+    void nonLeafInsert(NonLeafNodeInt * nonLeafNode, PageKeyPair<int> pageEntry);
 
 };
 	
