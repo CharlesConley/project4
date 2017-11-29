@@ -503,8 +503,10 @@ void BTreeIndex::scanNext(RecordId& outRid)
         //found a match. throw finish exception
         throw  IndexScanCompletedException();
     }
-    nextEntry++;
-
+	//try the next one
+	nextEntry++;
+	k=cnode->keyArray[nextEntry];
+	outRid = cnode->ridArray[nextEntry];
     }
 
 }
