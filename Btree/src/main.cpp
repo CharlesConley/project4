@@ -73,6 +73,7 @@ void indexTests();
 void test1();
 void test2();
 void test3();
+void test4();
 void errorTests();
 void deleteRelation();
 
@@ -140,6 +141,7 @@ int main(int argc, char **argv)
 	test1();
 	test2();
 	test3();
+	test4();
 	//errorTests();
 
   return 1;
@@ -174,6 +176,17 @@ void test3()
 	std::cout << "--------------------" << std::endl;
 	std::cout << "createRelationRandom" << std::endl;
 	createRelationRandom();
+	indexTests();
+	deleteRelation();
+}
+
+void test4()
+{
+	// test creating many relations
+	relationSize = 50000;
+	std::cout << "---------------------" << std::endl;
+	std::cout << "createRelationForward" << std::endl;
+	createRelationForward();
 	indexTests();
 	deleteRelation();
 }
